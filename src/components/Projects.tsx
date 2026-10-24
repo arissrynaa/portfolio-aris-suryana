@@ -1,9 +1,11 @@
-import Image from "next/image";
-import { profile } from "@/data/profile";
+"use client";
+
+import { useProfile } from "./ContentProvider";
 
 const MAX_VISIBLE = 6;
 
 export default function Projects() {
+  const profile = useProfile();
   const visible = profile.projects.slice(0, MAX_VISIBLE);
   const hasMore = profile.projects.length > MAX_VISIBLE;
 
@@ -20,12 +22,15 @@ export default function Projects() {
               <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50 transition-all duration-200 hover:-translate-y-1 hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-500/10 motion-reduce:transform-none">
                 <div className="relative aspect-[16/10] w-full overflow-hidden bg-zinc-800">
                   {project.image ? (
-                    <Image
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
                       src={project.image}
                       alt={`Tangkapan layar proyek ${project.title}`}
-                      fill
-                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                      className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transform-none"
+                      loading="lazy"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
+                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transform-none"
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-zinc-600" aria-hidden="true">

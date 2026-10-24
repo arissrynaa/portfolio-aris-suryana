@@ -22,8 +22,8 @@ export function verifyPassword(password: string): boolean {
 const TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 function sign(payload: string): string {
-  const secret = process.env.SECRET;
-  if (!secret) throw new Error("Missing SECRET");
+  const secret = process.env.SECRET ?? process.env.SESSION_SECRET;
+  if (!secret) throw new Error("Missing SECRET (or SESSION_SECRET)");
   return crypto.createHmac("sha256", secret).update(payload).digest("hex");
 }
 

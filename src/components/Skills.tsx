@@ -1,6 +1,9 @@
-import { profile } from "@/data/profile";
+"use client";
+
+import { useProfile } from "./ContentProvider";
 
 export default function Skills() {
+  const profile = useProfile();
   return (
     <section id="skills" aria-labelledby="skills-heading" className="border-t border-zinc-800/60">
       <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">

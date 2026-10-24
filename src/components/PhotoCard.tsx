@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import { useRef, useState } from "react";
-import { profile } from "@/data/profile";
+import { useProfile } from "./ContentProvider";
 
 export default function PhotoCard() {
+  const profile = useProfile();
   const cardRef = useRef<HTMLDivElement>(null);
   const [imgSrc, setImgSrc] = useState(profile.photo);
   const [failed, setFailed] = useState(false);
@@ -47,19 +47,19 @@ export default function PhotoCard() {
         onPointerLeave={handleLeave}
         className="relative aspect-[4/5] rounded-3xl border border-zinc-700/70 bg-zinc-900 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)] overflow-hidden transition-transform duration-200 ease-out motion-reduce:transition-none motion-reduce:transform-none"
       >
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={imgSrc}
           alt={`Foto profil ${profile.name}`}
-          fill
-          priority
-          sizes="(max-width: 768px) 100vw, 384px"
+          loading="eager"
+          decoding="async"
           onError={() => {
             if (!failed) {
               setFailed(true);
               setImgSrc(profile.fallbackPhoto);
             }
           }}
-          className="object-cover"
+          className="absolute inset-0 h-full w-full object-cover"
         />
         {/* gradient scrim + overlay info */}
         <div

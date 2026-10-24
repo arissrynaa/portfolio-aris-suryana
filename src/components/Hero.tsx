@@ -1,7 +1,10 @@
+"use client";
+
 import PhotoCard from "./PhotoCard";
-import { profile } from "@/data/profile";
+import { useProfile } from "./ContentProvider";
 
 export default function Hero() {
+  const profile = useProfile();
   return (
     <section id="hero" aria-labelledby="hero-heading" className="relative overflow-hidden">
       {/* subtle background ornament */}

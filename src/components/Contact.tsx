@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { profile } from "@/data/profile";
+import { useProfile } from "./ContentProvider";
 
 export default function Contact() {
+  const profile = useProfile();
   const [copied, setCopied] = useState(false);
 
   const copyEmail = async () => {

@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "postbuild": "node scripts/inject-release-marker.mjs"
+    "lint": "eslint"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
