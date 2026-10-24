@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { ensureSchema } from "@/lib/db";
+import { ensureSchema, sql } from "@/lib/db";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
 /** Owner-protected: upsert a single content key. Body: { key, value } */
@@ -26,11 +26,11 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "value too large" }, { status: 413 });
   }
   await ensureSchema();
-  const { db } = await import("@/lib/db");
-  await db().execute({
-    sql: `INSERT INTO content (key, value, updated_at) VALUES (?, ?, datetime('now'))
-          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-    args: [key, value],
-  });
+  await sql`
+    INSERT INTO content (key, value, updated_at)
+    VALUES (${key}, ${value}, now()::text)
+    ON CONFLICT (key)
+    DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
+  `;
   return NextResponse.json({ ok: true, key });
 }

@@ -2,38 +2,30 @@ export const dynamic = "force-dynamic";
 
 
 import { NextRequest, NextResponse } from "next/server";
+import { del } from "@vercel/blob";
 import { cookies } from "next/headers";
-import { ensureSchema } from "@/lib/db";
+import { ensureSchema, sql } from "@/lib/db";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
-/** GET /api/images/[id] — serve image bytes (public). */
+/** GET /api/images/[id] — redirect to the Vercel Blob URL (public). */
 export async function GET(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
   await ensureSchema();
-  const { db } = await import("@/lib/db");
-  const rs = await db().execute({
-    sql: "SELECT mime, data FROM images WHERE id = ?",
-    args: [id],
-  });
+  const rs = await sql`SELECT url, mime FROM images WHERE id = ${id}`;
   if (rs.rows.length === 0) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const mime = String(rs.rows[0].mime);
-  const data = String(rs.rows[0].data);
-  const bytes = Buffer.from(data, "base64");
-  return new NextResponse(new Uint8Array(bytes), {
-    headers: {
-      "Content-Type": mime,
-      "Content-Length": String(bytes.length),
-      "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
-    },
+  const url = String(rs.rows[0].url);
+  return NextResponse.redirect(url, {
+    status: 307,
+    headers: { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" },
   });
 }
 
-/** DELETE /api/images/[id] — owner-protected. */
+/** DELETE /api/images/[id] — owner-protected. Removes Blob object + metadata row. */
 export async function DELETE(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
@@ -44,10 +36,14 @@ export async function DELETE(
   }
   const { id } = await ctx.params;
   await ensureSchema();
-  const { db } = await import("@/lib/db");
-  const rs = await db().execute({ sql: "DELETE FROM images WHERE id = ?", args: [id] });
-  if (rs.rowsAffected === 0) {
+  const rs = await sql`DELETE FROM images WHERE id = ${id} RETURNING url`;
+  if (rs.rows.length === 0) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  try {
+    await del(String(rs.rows[0].url));
+  } catch {
+    // Blob already gone — metadata deletion still counts as success.
   }
   return NextResponse.json({ ok: true });
 }

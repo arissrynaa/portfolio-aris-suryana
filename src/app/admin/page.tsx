@@ -184,7 +184,7 @@ export default function AdminPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Gambar</h2>
         <p className="text-xs text-neutral-500">
-          Maks 2MB per gambar. Gunakan URL <code className="text-neutral-400">/api/images/&lt;id&gt;</code> di field
+          Maks 4MB per gambar. Gunakan URL <code className="text-neutral-400">/api/images/&lt;id&gt;</code> di field
           gambar konten (mis. profile.photo atau project image).
         </p>
         <input

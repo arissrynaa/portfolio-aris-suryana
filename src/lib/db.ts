@@ -1,37 +1,28 @@
-import { createClient } from "@libsql/client";
+import { sql } from "@vercel/postgres";
 
 /**
- * Turso (libSQL) client — singleton.
- * Required env vars:
- *   TURSO_DATABASE_URL   e.g. libsql://mydb-myorg.turso.io  (or file:local.db for local dev)
- *   TURSO_AUTH_TOKEN     auth token from `turso db tokens create`
+ * Vercel Postgres — singleton via the postgres.js driver `sql` template tag.
+ * POSTGRES_URL is auto-injected by Vercel when you create a Postgres database
+ * (Dashboard → Storage → Create Database, or `vercel link && vercel integration`).
+ * For local dev set POSTGRES_URL in .env.local to any Postgres connection string.
  */
-let _client: ReturnType<typeof createClient> | null = null;
-
-export function db() {
-  if (!_client) {
-    const url = process.env.TURSO_DATABASE_URL;
-    if (!url) throw new Error("Missing TURSO_DATABASE_URL");
-    _client = createClient({
-      url,
-      authToken: process.env.TURSO_AUTH_TOKEN,
-    });
-  }
-  return _client;
-}
+export { sql };
 
 export async function ensureSchema() {
-  await db().executeMultiple(`
+  await sql`
     CREATE TABLE IF NOT EXISTS content (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      updated_at TEXT NOT NULL DEFAULT (now()::text)
     );
+  `;
+  await sql`
     CREATE TABLE IF NOT EXISTS images (
       id TEXT PRIMARY KEY,
+      url TEXT NOT NULL,
       mime TEXT NOT NULL,
-      data TEXT NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      size INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT (now()::text)
     );
-  `);
+  `;
 }
