@@ -16,6 +16,7 @@ export const metadata: Metadata = {
     title: `${profile.name} — ${profile.role}`,
     description: profile.tagline,
     type: "website",
+    siteName: profile.name,
   },
   twitter: {
     card: "summary_large_image",

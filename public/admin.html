@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Admin Dashboard — Portfolio CMS</title>
+<script>globalThis.__LIGHTVELA_RELEASE_ID__="__LIGHTVELA_RELEASE_ID__";</script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: ui-sans-serif, system-ui, sans-serif; background:#09090b; color:#e4e4e7; line-height:1.5; }
+  main { max-width: 900px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.1rem; margin: 2.5rem 0 1rem; border-bottom: 1px solid #27272a; padding-bottom: .5rem; }
+  .sub { color:#a1a1aa; font-size:.9rem; margin:0 0 1.5rem; }
+  section.card { background:#18181b; border:1px solid #27272a; border-radius:.75rem; padding:1.25rem; margin-bottom:1rem; }
+  label { display:block; font-weight:600; margin-bottom:.4rem; }
+  textarea, input[type=text] { width:100%; background:#09090b; color:#e4e4e7; border:1px solid #3f3f46; border-radius:.5rem; padding:.5rem .75rem; font: 13px/1.5 ui-monospace, monospace; }
+  textarea { min-height: 140px; resize: vertical; }
+  input[type=file] { margin-top:.5rem; }
+  button { cursor:pointer; border-radius:.5rem; border:1px solid #52525b; background:#27272a; color:#e4e4e7; padding:.45rem 1rem; font-size:.875rem; font-weight:600; }
+  button:hover { border-color:#818cf8; }
+  button.primary { background:#6366f1; border-color:#6366f1; color:#fff; }
+  button.danger { background:#7f1d1d; border-color:#b91c1c; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; margin-top:.75rem; }
+  .msg { margin-top:.6rem; font-size:.85rem; }
+  .ok { color:#34d399; } .err { color:#f87171; } .muted { color:#a1a1aa; }
+  table { width:100%; border-collapse:collapse; font-size:.875rem; }
+  th, td { text-align:left; padding:.4rem .5rem; border-bottom:1px solid #27272a; }
+  img.thumb { width:48px; height:48px; object-fit:cover; border-radius:.375rem; background:#27272a; }
+  details summary { cursor:pointer; font-weight:600; }
+  .hint { font-size:.8rem; color:#71717a; margin:.3rem 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Admin Dashboard</h1>
+  <p class="sub">Kelola konten &amp; gambar portfolio. Perubahan tersimpan ke database site — tanpa edit kode.</p>
+  <div id="global-msg" class="msg" role="status"></div>
+
+  <h2>Konten</h2>
+  <div id="sections"></div>
+  <div class="row">
+    <button class="primary" id="save-all">Simpan Semua Perubahan</button>
+    <button id="reload-content">Muat Ulang</button>
+    <span class="muted" id="dirty-note"></span>
+  </div>
+  <details style="margin-top:1rem">
+    <summary>Muat ulang pratinjau dengan konten tersimpan</summary>
+    <p class="hint">Pratinjau site utama: <a href="/" target="_blank" rel="noopener">buka di tab baru</a> — konten baru muncul setelah di-fetch ulang.</p>
+  </details>
+
+  <h2>Gambar</h2>
+  <section class="card">
+    <label for="img-id">ID gambar (opsional — kosongkan untuk otomatis)</label>
+    <input type="text" id="img-id" placeholder="mis. hero-portrait atau project-1" />
+    <label for="img-file" style="margin-top:.75rem">Pilih file (maks 2MB)</label>
+    <input type="file" id="img-file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/avif" />
+    <div class="row">
+      <button class="primary" id="upload-btn">Upload Gambar</button>
+      <span class="msg" id="upload-msg"></span>
+    </div>
+  </section>
+  <section class="card">
+    <table>
+      <thead><tr><th></th><th>ID</th><th>Tipe</th><th>Ukuran</th><th>URL</th><th></th></tr></thead>
+      <tbody id="img-rows"><tr><td colspan="6" class="muted">Memuat…</td></tr></tbody>
+    </table>
+  </section>
+
+  <h2>Catatan</h2>
+  <ul class="muted" style="font-size:.85rem">
+    <li>Setiap section berupa JSON. Struktur tidak boleh diubah, hanya isi teks/URL.</li>
+    <li>409 dari server = versi halaman kadaluarsa — muat ulang halaman ini dan ulangi simpan.</li>
+    <li>Untuk pakai gambar di konten: isi field gambar dengan URL <code>/api/images/&lt;id&gt;</code>.</li>
+  </ul>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var SECTIONS = ["hero", "about", "skills", "projects", "contact"];
+  // Shape hints so we can build friendly per-field forms for the known profile structure.
+  var FIELD_HINTS = {
+    hero: [
+      ["name", "Nama"], ["role", "Peran"], ["tagline", "Tagline", "textarea"]
+    ],
+    about: null, // array of paragraphs -> JSON editor
+    skills: null,
+    projects: null,
+    contact: [
+      ["contact.email", "Email"], ["socials", "Socials (JSON)", "textarea"]
+    ]
+  };
+
+  var state = { sections: {}, dirty: {} };
+
+  function api(path, opts) {
+    opts = opts || {};
+    opts.credentials = "same-origin";
+    opts.headers = Object.assign({ "X-Website-Release": globalThis.__LIGHTVELA_RELEASE_ID__ }, opts.headers || {});
+    if (opts.body && typeof opts.body === "string") opts.headers["Content-Type"] = "application/json";
+    return fetch(path, opts).then(function (res) {
+      return res.text().then(function (text) {
+        var body = null;
+        try { body = JSON.parse(text); } catch (e) {}
+        if (res.status === 409) throw { conflict: true, message: "Versi halaman kadaluarsa. Muat ulang halaman ini lalu ulangi." };
+        if (!res.ok) throw { status: res.status, message: (body && body.error) || ("HTTP " + res.status) };
+        return body;
+      });
+    });
+  }
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { var d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+
+  function msg(el, text, cls) {
+    el.textContent = text;
+    el.className = "msg " + (cls || "");
+  }
+  function globalMsg(text, cls) { msg($("global-msg"), text, cls); }
+
+  // ---------- Content ----------
+  function buildSectionEditors() {
+    var host = $("sections");
+    host.innerHTML = "";
+    SECTIONS.forEach(function (key) {
+      var card = document.createElement("section");
+      card.className = "card";
+      var h = document.createElement("label");
+      h.textContent = key;
+      card.appendChild(h);
+      var ta = document.createElement("textarea");
+      ta.id = "ta-" + key;
+      ta.value = JSON.stringify(state.sections[key] || {}, null, 2);
+      ta.addEventListener("input", function () { markDirty(key, true); });
+      card.appendChild(ta);
+      var err = document.createElement("div");
+      err.className = "msg err"; err.id = "err-" + key;
+      card.appendChild(err);
+      host.appendChild(card);
+    });
+    updateDirtyNote();
+  }
+
+  function markDirty(key, v) {
+    state.dirty[key] = v;
+    updateDirtyNote();
+  }
+  function updateDirtyNote() {
+    var n = SECTIONS.filter(function (k) { return state.dirty[k]; });
+    $("dirty-note").textContent = n.length ? ("Belum disimpan: " + n.join(", ")) : "Semua tersimpan ✓";
+  }
+
+  function loadContent() {
+    return api("/api/content").then(function (data) {
+      var loaded = (data && data.sections) || {};
+      SECTIONS.forEach(function (k) {
+        state.sections[k] = loaded[k] !== undefined && loaded[k] !== null ? loaded[k] : null;
+      });
+      buildSectionEditors();
+      globalMsg("Konten dimuat.", "ok");
+    }).catch(function (e) {
+      SECTIONS.forEach(function (k) { state.sections[k] = null; });
+      buildSectionEditors();
+      globalMsg("Gagal memuat konten dari server" + (e && e.message ? ": " + e.message : "") + ". Editor menampilkan kosong — simpan akan membuat data baru. Frontend tetap pakai konten default build.", "err");
+    });
+  }
+
+  function saveAll() {
+    var payload = {};
+    var any = false;
+    SECTIONS.forEach(function (key) {
+      if (!state.dirty[key]) return;
+      var text = $("ta-" + key).value;
+      try {
+        payload[key] = JSON.parse(text); // validate
+        $("err-" + key).textContent = "";
+        any = true;
+      } catch (e) {
+        $("err-" + key).textContent = "JSON tidak valid: " + e.message;
+        payload[key] = undefined;
+      }
+    });
+    if (!any) { globalMsg("Tidak ada perubahan untuk disimpan.", "muted"); return; }
+    var bad = SECTIONS.filter(function (k) { return state.dirty[k] && payload[k] === undefined; });
+    if (bad.length) { globalMsg("Perbaiki JSON pada: " + bad.join(", "), "err"); return; }
+
+    var btn = $("save-all");
+    btn.disabled = true;
+    api("/api/content", { method: "PUT", body: JSON.stringify({ sections: payload }) })
+      .then(function () {
+        Object.keys(payload).forEach(function (k) { markDirty(k, false); });
+        updateDirtyNote();
+        globalMsg("Konten tersimpan ✓ (pratinjau site akan memakai konten baru saat fetch berikutnya)", "ok");
+      })
+      .catch(function (e) {
+        if (e && e.conflict) globalMsg(e.message, "err");
+        else globalMsg("Gagal menyimpan: " + (e.message || e), "err");
+      })
+      .then(function () { btn.disabled = false; });
+  }
+
+  // ---------- Images ----------
+  function listImages() {
+    return api("/api/images").then(function (data) {
+      var rows = (data && data.images) || [];
+      var tbody = $("img-rows");
+      tbody.innerHTML = "";
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="muted">Belum ada gambar.</td></tr>';
+        return;
+      }
+      rows.forEach(function (img) {
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          '<td><img class="thumb" src="' + esc(img.url) + '" alt="" onerror="this.style.visibility=\'hidden\'"></td>' +
+          "<td>" + esc(img.id) + "</td>" +
+          "<td>" + esc(img.mime) + "</td>" +
+          "<td>" + (img.bytes >= 1024 ? (img.bytes / 1024).toFixed(0) + " KB" : img.bytes + " B") + "</td>" +
+          '<td><code>/api/images/' + esc(img.id) + "</code></td>" +
+          "<td></td>";
+        var td = tr.lastElementChild;
+        var copy = document.createElement("button");
+        copy.textContent = "Copy URL";
+        copy.addEventListener("click", function () {
+          var full = location.origin + "/api/images/" + img.id;
+          (navigator.clipboard ? navigator.clipboard.writeText(full) : Promise.reject()).then(function () {
+            copy.textContent = "Tersalin ✓"; setTimeout(function () { copy.textContent = "Copy URL"; }, 1500);
+          }, function () { window.prompt("Copy URL:", full); });
+        });
+        var del = document.createElement("button");
+        del.textContent = "Delete";
+        del.className = "danger";
+        del.addEventListener("click", function () {
+          if (!confirm("Hapus gambar '" + img.id + "'? Konten yang memakainya akan fallback ke gambar bawaan.")) return;
+          del.disabled = true;
+          api("/api/images/" + encodeURIComponent(img.id), { method: "DELETE" })
+            .then(function () { globalMsg("Gambar dihapus ✓", "ok"); listImages(); })
+            .catch(function (e) { globalMsg("Gagal hapus: " + (e.message || e), "err"); del.disabled = false; });
+        });
+        td.appendChild(copy); td.appendChild(document.createTextNode(" ")); td.appendChild(del);
+        tbody.appendChild(tr);
+      });
+    }).catch(function (e) {
+      $("img-rows").innerHTML = '<tr><td colspan="6" class="err">Gagal memuat daftar gambar: ' + esc(e.message || e) + "</td></tr>";
+    });
+  }
+
+  function uploadImage() {
+    var fileEl = $("img-file");
+    var file = fileEl.files && fileEl.files[0];
+    var msgEl = $("upload-msg");
+    if (!file) { msg(msgEl, "Pilih file dulu.", "err"); return; }
+    if (file.size > 2 * 1024 * 1024) { msg(msgEl, "File terlalu besar (maks 2MB).", "err"); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var result = String(reader.result);
+      var base64 = result.indexOf(",") >= 0 ? result.slice(result.indexOf(",") + 1) : result;
+      var id = $("img-id").value.trim();
+      var body = { mime: file.type || "application/octet-stream", data: base64 };
+      if (id) body.id = id;
+      $("upload-btn").disabled = true;
+      msg(msgEl, "Mengunggah…", "muted");
+      api("/api/images", { method: "POST", body: JSON.stringify(body) })
+        .then(function (res) {
+          msg(msgEl, "Tersimpan: " + res.url + " ✓", "ok");
+          fileEl.value = "";
+          listImages();
+        })
+        .catch(function (e) { msg(msgEl, "Gagal upload: " + (e.message || e), "err"); })
+        .then(function () { $("upload-btn").disabled = false; });
+    };
+    reader.onerror = function () { msg(msgEl, "Gagal membaca file.", "err"); };
+    reader.readAsDataURL(file);
+  }
+
+  $("save-all").addEventListener("click", saveAll);
+  $("reload-content").addEventListener("click", function () { loadContent(); });
+  $("upload-btn").addEventListener("click", uploadImage);
+  loadContent();
+  listImages();
+})();
+</script>
+</body>
+</html>
